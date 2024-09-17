@@ -27,7 +27,7 @@ library(CCP)
 # Group 1
 
 ```{r}
-kesehatan <- read_excel("C:/Users/angel/OneDrive - Bina Nusantara/Semester 6/Multivariate Statistics/AOL/kesehatan.xlsx")
+kesehatan <- read_excel("C:/Users/edric/OneDrive - Bina Nusantara/Semester 6/Multivariate Statistics/AOL/kesehatan.xlsx")
 kesehatan
 
 kelompoksatu <- kesehatan[, c("imunisasi", "air", "dokter")]
