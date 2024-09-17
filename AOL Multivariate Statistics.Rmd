@@ -1,0 +1,410 @@
+---
+title: "AOL Multivariate Statistics"
+author: "Edrick Setiawan"
+date: "2024-06-18"
+output: html_document
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+# Import Library
+
+```{r}
+library(readxl)
+library(mvShapiroTest)
+library(car)
+library(MASS)
+library(GGally)
+library(CCA)
+library(expm)
+library(dplyr)
+library(bestNormalize)
+library(mvoutlier)
+library(CCP)
+```
+
+# Group 1
+
+```{r}
+kesehatan <- read_excel("C:/Users/angel/OneDrive - Bina Nusantara/Semester 6/Multivariate Statistics/AOL/kesehatan.xlsx")
+kesehatan
+
+kelompoksatu <- kesehatan[, c("imunisasi", "air", "dokter")]
+kelompoksatu
+```
+
+## Normality Assumption
+
+H0: variabel pada kelompok 1 berdistribusi multivariate normal H1:
+variabel pada kelompok 1 tidak berdistribusi multivariate normal
+
+```{r}
+mvShapiro.Test(as.matrix(kelompoksatu))
+```
+
+### Transformation the Data
+
+```{r}
+transform_pt <- summary(powerTransform(kelompoksatu))
+
+imunisasi <- kelompoksatu[,1]^transform_pt$result[1]
+air <- kelompoksatu[,2]^transform_pt$result[2]
+dokter <- kelompoksatu[,3]^transform_pt$result[3]
+
+transformed <- tibble(imunisasi, air, dokter)
+transformed <- as.data.frame(scale(transformed))
+
+mvShapiro.Test(as.matrix(transformed))
+```
+
+## Linearity Assumption
+
+```{r}
+ggpairs(transformed) 
+```
+
+## Cor test
+
+```{r}
+cor.test(transformed$imunisasi, transformed$air)
+cor.test(transformed$imunisasi, transformed$dokter)
+cor.test(transformed$air, transformed$dokter)
+```
+
+## Multicollinearity Test
+
+```{r warning=FALSE}
+kelompoksatu$DummyY <- seq(1)
+model1 <- lm(DummyY ~., data = kelompoksatu)
+vif(model1)
+```
+
+# Group 2
+
+```{r}
+sosioekonomi <- read_excel("C:/Users/angel/OneDrive - Bina Nusantara/Semester 6/Multivariate Statistics/AOL/sosioekonomi.xlsx")
+sosioekonomi
+
+kelompokdua <- sosioekonomi[, c("pengangguran", "rumah", "pengeluaran")]
+kelompokdua
+```
+
+## Normality Assumption
+
+H0: variabel pada kelompok 2 berdistribusi multivariate normal H1:
+variabel pada kelompok 2 tidak berdistribusi multivariate normal
+
+```{r}
+mvShapiro.Test(as.matrix(kelompokdua))
+```
+
+### Transformation the Data
+
+```{r}
+transform_pt2 <- summary(powerTransform(kelompokdua))
+
+pengangguran <- kelompokdua[,1]^transform_pt2$result[1]
+rumah <- kelompokdua[,2]^transform_pt2$result[2]
+pengeluaran <- kelompokdua[,3]^transform_pt2$result[3]
+transformed2 <- tibble(pengangguran,rumah,pengeluaran)
+transformed2 <- as.data.frame(scale(transformed2))
+
+mvShapiro.Test(as.matrix(transformed2)) 
+```
+
+## Linearity Assumption
+
+```{r}
+ggpairs(transformed2)
+```
+
+```{r}
+cor.test(transformed2$pengangguran, transformed2$rumah)
+cor.test(transformed2$pengangguran, transformed2$pengeluaran)
+cor.test(transformed2$rumah, transformed2$pengeluaran)
+```
+
+## Multicollinearity Test
+
+```{r}
+kelompokdua$DummyY <- seq(1)
+model2 <- lm(DummyY ~., data = kelompokdua)
+vif(model2)
+```
+
+# Merge the Dataset
+
+```{r}
+# Menggabungkan data kelompok satu dan kelompok dua menjadi satu frame
+data_cca <- cbind(transformed, transformed2)
+
+# Menampilkan hasil penggabungan
+print(data_cca)
+```
+
+# Canonical Correlation Analysis
+
+## Matrics Correlation
+
+```{r}
+rho = cor(data_cca)
+rho
+```
+
+```{r}
+(p11 = rho[1:3, 1:3])
+(p12 = rho[1:3, 4:6])
+(p21 = rho[4:6, 1:3])
+(p22 = rho[4:6, 4:6])
+```
+
+```{r}
+(invsqrt_p11 = solve(sqrtm(p11)))
+(inv_p22 = solve(p22))
+```
+
+### Membuat matriks A
+
+```{r}
+A = invsqrt_p11 %*% p12 %*% inv_p22 %*% p21 %*% invsqrt_p11
+A
+```
+
+```{r}
+# Menghitung nilai korelasi kanonik dari A
+(r2 = eigen(A)$values)
+(r = sqrt(r2))
+```
+
+## Uji Serentak
+
+A_3,3,30 = 0.563 Karena lambda hitung \< lambda tabel = 0.492 \< 0.563
+maka setidaknya ada 1 fungsi kanonik yang signifikan.
+
+```{r}
+lambda = det(rho)/(det(p11)*det(p22))
+lambda
+```
+
+## Uji Parsial (MANUAL)
+
+```{r}
+lambda1 = (1-r[1]^2)*(1-r[2]^2)*(1-r[3]^2)
+lambda1
+
+lambda2 = (1-r[2]^2)*(1-r[3]^2)
+lambda2
+
+lambda3 = (1-r[3]^2)
+lambda3
+
+lambda_k <- c(lambda1, lambda2, lambda3)
+```
+
+### Hitung Nilai W
+
+```{r}
+p = 3
+q = 3
+n = 34
+
+# w
+w = n - (1/2)*(p + q + 3)
+w
+```
+
+### Hitung Nilai t untuk semua K
+
+```{r}
+# t untuk k = 1
+t_1 = sqrt(((p-1+1)^2 * (q-1+1)^2 - 4)/((p-1+1)^2 + (q-1+1)^2 - 5))
+
+# t untuk k = 2
+t_2 = sqrt(((p-2+1)^2 * (q-2+1)^2 - 4)/((p-2+1)^2 + (q-2+1)^2 - 5))
+
+# t untuk k = 3
+t_3 = sqrt(((p-3+1)^2 * (q-3+1)^2 - 4)/((p-3+1)^2 + (q-3+1)^2 - 5))
+
+t_k <- c(t_1, t_2, t_3)
+t_k
+```
+
+### Hitung Nilai df1 untuk semua K
+
+```{r}
+# df1 untuk k = 1
+df1_1 = (p-1+1)*(q-1+1)
+
+# df1 untuk k = 2
+df1_2 = (p-2+1)*(q-2+1)
+
+# df1 untuk k = 3
+df1_3 = (p-3+1)*(q-3+1)
+
+df1 <- c(df1_1, df1_2, df1_3)
+df1
+```
+
+### Hitung nilai df2 untuk semua K
+
+```{r}
+# df2 untuk k = 1
+df2_1 = w * t_1 - (1/2) * ((p-1+1) * (q-1+1)) + 1
+
+# df2 untuk k = 2
+df2_2 = w * t_2 - (1/2) * ((p-2+1) * (q-2+1)) + 1
+
+# df2 untuk k = 3
+df2_3 = w * t_3 - (1/2) * ((p-3+1) * (q-3+1)) + 1
+
+df2 <- c(df2_1, df2_2, df2_3)
+df2
+```
+
+### Hitung nilai f hitung
+
+```{r}
+# F hitung untuk k = 1
+f_1 = ((1-lambda1^(1/t_1)) / lambda1^(1/t_1)) * (df2_1 / df1_1)
+
+# F hitung untuk k = 2
+f_2 = ((1-lambda2^(1/t_2)) / lambda2^(1/t_2)) * (df2_2 / df1_2)
+
+# F hitung untuk k = 3
+f_3 = ((1-lambda3^(1/t_3)) / lambda3^(1/t_3)) * (df2_3 / df1_3)
+
+f_k <- c(f_1, f_2, f_3)
+f_k
+```
+
+```{r}
+ftable <- c(1.725270585, 2.044390135, 2.880694517)
+```
+
+```{r}
+# Result
+result <- data.frame(lambda_k, t_k, df1, df2, f_k, ftable)
+result
+```
+
+Tolak H0 jika F hitung \> F table Berdasarkan hasil maka dapat ditarik
+kesimpulan bahwa: - Dikarenakan nilai F hitung \> F table yaitu
+2.5669208 \> 1.725270585 maka tolak H0. Artinya, minimal ada 1 pasangan
+canonical variate yang saling berkorelasi atau untuk fungsi kanonik
+pertama ada hubungan antara kelompok variabel x dan kelompok variabel
+y. - Dikarenakan nilai F hitung \> F table yaitu 2.580316 \> 2.044390135
+maka tolak H0. Artinya, minimal ada 1 pasangan canonical variate yang
+saling berkorelasi atau untuk fungsi kanonik kedua ada hubungan antara
+kelompok variabel x dan kelompok variabel y. - Dikarenakan nilai F
+hitung \< F table yaitu 0.045 \< 2.880694517 maka gagal tolak H0.
+Artinya, untuk fungsi kanonik ketiga tidak terdapat hubungan antara
+kelompok variabel x dan kelompok variabel y.
+
+## Uji Parsial (PACKAGE)
+
+```{r}
+# Perform Wilks' Lambda test using CCP package
+n <- 34
+p <- 3
+q <- 3
+wilks_result <- p.asym(r, n, p, q, tstat = "Wilks")
+
+# Print the results
+wilks_result
+
+## F-test
+F_1 = wilks_result$approx[1]
+F_2 = wilks_result$approx[2]
+F_3 = wilks_result$approx[3]
+
+## F-Table
+f_table_1 = qf(p=0.10, wilks_result$df1[1], wilks_result$df2[1], lower.tail = FALSE)
+f_table_2 = qf(p=0.10, wilks_result$df1[2], wilks_result$df2[2], lower.tail = FALSE)
+f_table_3 = qf(p=0.10, wilks_result$df1[3], wilks_result$df2[3], lower.tail = FALSE)
+
+F_1
+F_2
+F_3
+
+
+f_table_1
+f_table_2
+f_table_3
+```
+
+```{r}
+(e = eigen(A)$vector)
+```
+
+```{r}
+e1 = eigen(A)$vector[,1]
+(u1 = e1 %*% invsqrt_p11)
+```
+
+```{r}
+e2 = eigen(A)$vector[,2]
+(u2 = e2 %*% invsqrt_p11)
+```
+
+```{r}
+e3 = eigen(A)$vector[,3]
+(u3 = e3 %*% invsqrt_p11)
+```
+
+### Membuat matriks B
+
+```{r}
+(invsqrt_p22 = solve(sqrtm(p22)))
+(inv_p11 = solve(p11))
+```
+
+```{r}
+B = invsqrt_p22 %*% p21 %*% inv_p11 %*% p12 %*% invsqrt_p22
+B
+```
+
+```{r}
+(f = eigen(B)$vector)
+```
+
+```{r}
+f1 = eigen(B)$vector[,1]
+(v1 = f1 %*% invsqrt_p22)
+```
+
+```{r}
+f2 = eigen(B)$vector[,2]
+(v2 = f2 %*% invsqrt_p22)
+```
+
+```{r}
+f3 = eigen(B)$vector[,3]
+(v3 = f3 %*% invsqrt_p22)
+```
+
+# Muatan Kanonik
+
+```{r}
+# Muatan kanonik untuk variabel X
+canonical_loadings_X1 = p11 %*% t(u1)
+canonical_loadings_X2 = p11 %*% t(u2)
+
+# Muatan kanonik untuk variabel Y
+canonical_loadings_Y1 = p22 %*% t(v1)
+canonical_loadings_Y2 = p22 %*% t(v2)
+```
+
+```{r}
+library(knitr)
+
+# Membuat data frame untuk muatan kanonik
+muatan_kanonik <- data.frame(
+  Variabel = c("imunisasi", "air", "dokter", "pengangguran", "rumah", "pengeluaran"),
+  Fungsi_Kanonik_1 = c(canonical_loadings_X1, canonical_loadings_Y1),
+  Fungsi_Kanonik_2 = c(canonical_loadings_X2, canonical_loadings_Y2)
+)
+
+# Menampilkan data frame
+print(muatan_kanonik)
+```
